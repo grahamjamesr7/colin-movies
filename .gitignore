@@ -165,3 +165,6 @@ dist
 .env*
 !.env.example
 .wrangler/
+
+# docs
+requirements.md
