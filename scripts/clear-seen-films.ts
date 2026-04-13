@@ -1,12 +1,16 @@
 import { execSync } from 'child_process';
 import { readFileSync, writeFileSync, unlinkSync } from 'fs';
-import { join } from 'path';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 
 const TMP = '/tmp/colin-movies-kv-keys.json';
 
 // read the KV binding name from wrangler config
-const configPath = join(import.meta.dirname, '..', 'wrangler.jsonc');
-const configText = readFileSync(configPath, 'utf8').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+const configPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'wrangler.jsonc');
+const configText = readFileSync(configPath, 'utf8')
+	.replace(/\/\/.*$/gm, '')
+	.replace(/\/\*[\s\S]*?\*\//g, '')
+	.replace(/,\s*([}\]])/g, '$1');
 const config = JSON.parse(configText);
 const binding: string = config.kv_namespaces[0].binding;
 
