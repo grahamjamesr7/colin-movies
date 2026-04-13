@@ -1,19 +1,20 @@
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import worker from '../src/index';
-import type { Film } from '../src/bullock';
+import type { Film, Showtime } from '../src/bullock';
 
 const IncomingRequest = Request<unknown, IncomingRequestCfProperties>;
 
 vi.mock('../src/bullock', () => ({
 	fetchFilms: vi.fn<() => Promise<Film[]>>(),
+	fetchShowtimes: vi.fn<() => Promise<Showtime[]>>(),
 }));
 
 vi.mock('../src/email', () => ({
 	sendEmail: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
 }));
 
-import { fetchFilms } from '../src/bullock';
+import { fetchFilms, fetchShowtimes } from '../src/bullock';
 import { sendEmail } from '../src/email';
 
 const FILMS: Film[] = [
@@ -21,6 +22,10 @@ const FILMS: Film[] = [
 	{ id: 2, slug: 'the-dark-knight', title: 'The Dark Knight', link: 'https://example.com/the-dark-knight', theaters: ['imax'] },
 	{ id: 3, slug: 'oppenheimer', title: 'Oppenheimer', link: 'https://example.com/oppenheimer', theaters: ['imax'] },
 ];
+
+function showtimesFor(films: Film[]): Showtime[] {
+	return films.map((f) => ({ filmSlug: f.slug, filmTitle: f.title, date: '2026-05-01' }));
+}
 
 async function clearKV() {
 	const keys = await env.SEEN_FILMS.list();
@@ -32,20 +37,22 @@ async function clearKV() {
 describe('new film detection', () => {
 	beforeEach(async () => {
 		vi.mocked(fetchFilms).mockReset();
+		vi.mocked(fetchShowtimes).mockReset();
 		vi.mocked(sendEmail).mockReset().mockResolvedValue(undefined);
 		await clearKV();
 	});
 
 	it('emails about all films on first run (empty KV)', async () => {
 		vi.mocked(fetchFilms).mockResolvedValue(FILMS);
+		vi.mocked(fetchShowtimes).mockResolvedValue(showtimesFor(FILMS));
 
 		const ctx = createExecutionContext();
 		const res = await worker.fetch(new IncomingRequest('http://localhost'), env, ctx);
 		await waitOnExecutionContext(ctx);
 
 		expect(res.status).toBe(200);
-		const body = await res.json<{ newFilms: number }>();
-		expect(body.newFilms).toBe(3);
+		const body = await res.json<{ newFilms: Film[] }>();
+		expect(body.newFilms).toHaveLength(3);
 
 		expect(sendEmail).toHaveBeenCalledOnce();
 		const [, , subject, html] = vi.mocked(sendEmail).mock.calls[0];
@@ -57,6 +64,7 @@ describe('new film detection', () => {
 
 	it('does not email when no new films are added', async () => {
 		vi.mocked(fetchFilms).mockResolvedValue(FILMS);
+		vi.mocked(fetchShowtimes).mockResolvedValue(showtimesFor(FILMS));
 
 		// first run -- seeds KV
 		const ctx1 = createExecutionContext();
@@ -70,12 +78,13 @@ describe('new film detection', () => {
 		await waitOnExecutionContext(ctx2);
 
 		expect(res.status).toBe(200);
-		expect(await res.json<{ newFilms: number }>()).toEqual({ newFilms: 0 });
+		expect((await res.json<{ newFilms: Film[] }>()).newFilms).toHaveLength(0);
 		expect(sendEmail).not.toHaveBeenCalled();
 	});
 
 	it('only emails about the newly added film', async () => {
 		vi.mocked(fetchFilms).mockResolvedValue(FILMS);
+		vi.mocked(fetchShowtimes).mockResolvedValue(showtimesFor(FILMS));
 
 		// first run -- seeds KV with the initial 3
 		const ctx1 = createExecutionContext();
@@ -91,7 +100,9 @@ describe('new film detection', () => {
 			link: 'https://example.com/the-odyssey',
 			theaters: ['imax'],
 		};
-		vi.mocked(fetchFilms).mockResolvedValue([...FILMS, newFilm]);
+		const allFilms = [...FILMS, newFilm];
+		vi.mocked(fetchFilms).mockResolvedValue(allFilms);
+		vi.mocked(fetchShowtimes).mockResolvedValue(showtimesFor(allFilms));
 
 		// second run
 		const ctx2 = createExecutionContext();
@@ -99,12 +110,67 @@ describe('new film detection', () => {
 		await waitOnExecutionContext(ctx2);
 
 		expect(res.status).toBe(200);
-		expect(await res.json<{ newFilms: number }>()).toEqual({ newFilms: 1 });
+		expect((await res.json<{ newFilms: Film[] }>()).newFilms).toHaveLength(1);
 
 		expect(sendEmail).toHaveBeenCalledOnce();
 		const [, , subject, html] = vi.mocked(sendEmail).mock.calls[0];
 		expect(subject).toContain('1 New Film');
 		expect(html).toContain('The Odyssey');
 		expect(html).not.toContain('Interstellar');
+	});
+
+	it('sends admin copy when COPY_ADMIN is true and TEST is false', async () => {
+		vi.mocked(fetchFilms).mockResolvedValue(FILMS);
+		vi.mocked(fetchShowtimes).mockResolvedValue(showtimesFor(FILMS));
+
+		const prodEnv = { ...env, TEST: 'false', COPY_ADMIN: 'true' } as typeof env;
+		const ctx = createExecutionContext();
+		await worker.fetch(new IncomingRequest('http://localhost'), prodEnv, ctx);
+		await waitOnExecutionContext(ctx);
+
+		expect(sendEmail).toHaveBeenCalledTimes(2);
+		const [, colinTo] = vi.mocked(sendEmail).mock.calls[0];
+		const [, adminTo] = vi.mocked(sendEmail).mock.calls[1];
+		expect(colinTo).toBe('CLIENT_EMAIL_REDACTED');
+		expect(adminTo).toBe('ADMIN_EMAIL_REDACTED');
+	});
+
+	it('ignores showtimes for non-IMAX films', async () => {
+		vi.mocked(fetchFilms).mockResolvedValue(FILMS);
+		// showtimes include an entry for a film not in the IMAX list
+		vi.mocked(fetchShowtimes).mockResolvedValue([
+			...showtimesFor([FILMS[0]]),
+			{ filmSlug: 'shipwrecked', filmTitle: 'Shipwrecked', date: '2026-09-30' },
+		]);
+
+		const ctx = createExecutionContext();
+		const res = await worker.fetch(new IncomingRequest('http://localhost'), env, ctx);
+		await waitOnExecutionContext(ctx);
+
+		expect(res.status).toBe(200);
+		const body = await res.json<{ newFilms: Film[] }>();
+		// only Interstellar is active -- the non-IMAX showtime doesn't make any extra film active
+		expect(body.newFilms).toHaveLength(1);
+		expect(body.newFilms[0].slug).toBe('interstellar');
+	});
+
+	it('skips films with no upcoming showtimes', async () => {
+		vi.mocked(fetchFilms).mockResolvedValue(FILMS);
+		// only Interstellar has showtimes
+		vi.mocked(fetchShowtimes).mockResolvedValue(showtimesFor([FILMS[0]]));
+
+		const ctx = createExecutionContext();
+		const res = await worker.fetch(new IncomingRequest('http://localhost'), env, ctx);
+		await waitOnExecutionContext(ctx);
+
+		expect(res.status).toBe(200);
+		const body = await res.json<{ newFilms: Film[] }>();
+		expect(body.newFilms).toHaveLength(1);
+
+		expect(sendEmail).toHaveBeenCalledOnce();
+		const [, , , html] = vi.mocked(sendEmail).mock.calls[0];
+		expect(html).toContain('Interstellar');
+		expect(html).not.toContain('The Dark Knight');
+		expect(html).not.toContain('Oppenheimer');
 	});
 });

@@ -1,11 +1,19 @@
-import { fetchFilms } from './bullock.ts';
+import { fetchFilms, fetchShowtimes } from './bullock.ts';
 import { sendEmail } from './email.ts';
 import { getNewFilms, markSeen } from './kv.ts';
 
 async function checkForNewFilms(env: Env) {
 	const allFilms = await fetchFilms('imax');
 	console.log(`Fetched ${allFilms.length} total IMAX films.`);
-	const newFilms = await getNewFilms(env.SEEN_FILMS, allFilms);
+	const showtimes = await fetchShowtimes(allFilms);
+	const slugsWithShowtimes = new Set(showtimes.map((s) => s.filmSlug));
+	const activeFilms = allFilms.filter((f) => slugsWithShowtimes.has(f.slug));
+	const skippedFilms = allFilms.filter((f) => !slugsWithShowtimes.has(f.slug));
+	if (skippedFilms.length > 0) {
+		console.debug(`Skipping ${skippedFilms.length} film(s) with no upcoming showtimes: ${skippedFilms.map((f) => f.title).join(', ')}`);
+	}
+	console.log(`${activeFilms.length} films have upcoming showtimes.`);
+	const newFilms = await getNewFilms(env.SEEN_FILMS, activeFilms);
 
 	if (newFilms.length === 0) {
 		console.log('No new films detected.');
@@ -20,14 +28,14 @@ async function checkForNewFilms(env: Env) {
 		`[Movie Bot] ${newFilms.length} New Film${newFilms.length > 1 ? 's' : ''} at the Bullock!`,
 		`<p>New IMAX films just posted:</p><ul>${filmList}</ul>`,
 	);
-	if (env.TEST !== 'true' && env.COPY_ADMIN) {
+	if (env.TEST !== 'true' && env.COPY_ADMIN === 'true') {
 		await sendEmail(
 			env.RESEND_API_KEY,
 			env.ADMIN_EMAIL,
 			`[Movie Bot] ${newFilms.length} New Film${newFilms.length > 1 ? 's' : ''} at the Bullock!`,
 			`<p>New IMAX films just posted:</p><ul>${filmList}</ul>`,
 		);
-	} else if (env.TEST === 'true' && env.COPY_ADMIN) {
+	} else if (env.TEST === 'true' && env.COPY_ADMIN === 'true') {
 		console.debug('Skipping admin copy for testing.');
 	}
 
@@ -52,7 +60,7 @@ export default {
 		console.log('Manual fetch triggered.');
 		try {
 			const newFilms = await checkForNewFilms(env);
-			return new Response(JSON.stringify({ newFilms: newFilms.length }), {
+			return new Response(JSON.stringify({ newFilms: newFilms }), {
 				headers: { 'content-type': 'application/json' },
 			});
 		} catch (error) {

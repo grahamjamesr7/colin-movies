@@ -135,7 +135,10 @@ export async function fetchShowtimes(films: Film[]): Promise<Showtime[]> {
 			if (date < today) continue;
 			const film = resolveFilmName(name, byName);
 			if (!film) {
-				throw new Error(`No film matches showtime title: ${JSON.stringify(raw)}`);
+				// showtimes don't carry a theater taxonomy, so non-IMAX
+				// showtimes (e.g. Spirit Theater) won't match -- skip them
+				console.debug(`Skipping unmatched showtime: ${JSON.stringify(raw)}`);
+				continue;
 			}
 			out.push({ filmSlug: film.slug, filmTitle: film.title, date });
 		}
