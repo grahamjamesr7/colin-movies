@@ -1,0 +1,25 @@
+{
+  "name": "colin-movies",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "start": "wrangler dev",
+    "test": "vitest",
+    "cf-typegen": "wrangler types",
+    "kv:clear": "npx tsx scripts/clear-seen-films.ts"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.12.4",
+    "@types/node": "^25.6.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.5.2",
+    "vitest": "~3.2.0",
+    "wrangler": "^4.81.1"
+  },
+  "dependencies": {
+    "claude": "^0.1.1",
+    "resend": "^6.11.0"
+  }
+}
