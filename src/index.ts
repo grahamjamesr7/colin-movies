@@ -4,15 +4,20 @@ import { getNewFilms, markSeen } from './kv.ts';
 
 async function checkForNewFilms(env: Env) {
 	const allFilms = await fetchFilms('imax');
+
 	console.log(`Fetched ${allFilms.length} total IMAX films.`);
+
+	// get the showtimes and determine which ones match films
 	const showtimes = await fetchShowtimes(allFilms);
 	const slugsWithShowtimes = new Set(showtimes.map((s) => s.filmSlug));
 	const activeFilms = allFilms.filter((f) => slugsWithShowtimes.has(f.slug));
 	const skippedFilms = allFilms.filter((f) => !slugsWithShowtimes.has(f.slug));
+
 	if (skippedFilms.length > 0) {
 		console.debug(`Skipping ${skippedFilms.length} film(s) with no upcoming showtimes: ${skippedFilms.map((f) => f.title).join(', ')}`);
 	}
 	console.log(`${activeFilms.length} films have upcoming showtimes.`);
+
 	const newFilms = await getNewFilms(env.SEEN_FILMS, activeFilms);
 
 	if (newFilms.length === 0) {
@@ -21,13 +26,16 @@ async function checkForNewFilms(env: Env) {
 	}
 
 	console.log(`Detected ${newFilms.length} new film(s): ${newFilms.map((f) => f.title).join('\n')}`);
+
 	const filmList = newFilms.map((f) => `<li><a href="${f.link}">${f.title}</a></li>`).join('');
+
 	await sendEmail(
 		env.RESEND_API_KEY,
 		env.TEST === 'true' ? env.ADMIN_EMAIL : env.CLIENT_EMAIL,
 		`[Movie Bot] ${newFilms.length} New Film${newFilms.length > 1 ? 's' : ''} at the Bullock!`,
 		`<p>New IMAX films just posted:</p><ul>${filmList}</ul>`,
 	);
+
 	if (env.TEST !== 'true' && env.COPY_ADMIN === 'true') {
 		await sendEmail(
 			env.RESEND_API_KEY,

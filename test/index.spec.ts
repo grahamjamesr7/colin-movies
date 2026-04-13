@@ -131,8 +131,8 @@ describe('new film detection', () => {
 		expect(sendEmail).toHaveBeenCalledTimes(2);
 		const [, colinTo] = vi.mocked(sendEmail).mock.calls[0];
 		const [, adminTo] = vi.mocked(sendEmail).mock.calls[1];
-		expect(colinTo).toBe('CLIENT_EMAIL_REDACTED');
-		expect(adminTo).toBe('ADMIN_EMAIL_REDACTED');
+		expect(colinTo).toBe(env.CLIENT_EMAIL);
+		expect(adminTo).toBe(env.ADMIN_EMAIL);
 	});
 
 	it('ignores showtimes for non-IMAX films', async () => {

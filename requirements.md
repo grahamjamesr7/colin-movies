@@ -26,8 +26,8 @@ To help Colin out, we're going to build the simplest program possible we can hos
   - Doesn't have to alert as soon as the movie is posted, but we should try to catch any new posting within 2 hours if possible
 - Must be the lightest weight code we can produce in Typescript
   - Must be strongly typed
-- Must send new movie notifications by email to `CLIENT_EMAIL_REDACTED` and only this address (no other users in the future)
-- Must send error notifications by email to me at `ADMIN_EMAIL_REDACTED` with subject line "Colin Movie Bot Error" and body as the error itself
+- Must send new movie notifications by email to the client (configured via CLIENT_EMAIL secret)
+- Must send error notifications by email to the admin (configured via ADMIN_EMAIL secret) with subject line "Colin Movie Bot Error" and body as the error itself
 - Keep overall cost to under $5 a month
 - All deployment should be done from my local via CLI
 - All configuration should live in .env files or similar, including email addresses, runtime filter, cron expression, etc.
