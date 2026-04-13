@@ -55,7 +55,7 @@ describe('new film detection', () => {
 		expect(body.newFilms).toHaveLength(3);
 
 		expect(sendEmail).toHaveBeenCalledOnce();
-		const [, , subject, html] = vi.mocked(sendEmail).mock.calls[0];
+		const [, , , subject, html] = vi.mocked(sendEmail).mock.calls[0];
 		expect(subject).toContain('3 New Films');
 		expect(html).toContain('Interstellar');
 		expect(html).toContain('The Dark Knight');
@@ -113,7 +113,7 @@ describe('new film detection', () => {
 		expect((await res.json<{ newFilms: Film[] }>()).newFilms).toHaveLength(1);
 
 		expect(sendEmail).toHaveBeenCalledOnce();
-		const [, , subject, html] = vi.mocked(sendEmail).mock.calls[0];
+		const [, , , subject, html] = vi.mocked(sendEmail).mock.calls[0];
 		expect(subject).toContain('1 New Film');
 		expect(html).toContain('The Odyssey');
 		expect(html).not.toContain('Interstellar');
@@ -129,8 +129,8 @@ describe('new film detection', () => {
 		await waitOnExecutionContext(ctx);
 
 		expect(sendEmail).toHaveBeenCalledTimes(2);
-		const [, colinTo] = vi.mocked(sendEmail).mock.calls[0];
-		const [, adminTo] = vi.mocked(sendEmail).mock.calls[1];
+		const [, , colinTo] = vi.mocked(sendEmail).mock.calls[0];
+		const [, , adminTo] = vi.mocked(sendEmail).mock.calls[1];
 		expect(colinTo).toBe(env.CLIENT_EMAIL);
 		expect(adminTo).toBe(env.ADMIN_EMAIL);
 	});
@@ -168,7 +168,7 @@ describe('new film detection', () => {
 		expect(body.newFilms).toHaveLength(1);
 
 		expect(sendEmail).toHaveBeenCalledOnce();
-		const [, , , html] = vi.mocked(sendEmail).mock.calls[0];
+		const [, , , , html] = vi.mocked(sendEmail).mock.calls[0];
 		expect(html).toContain('Interstellar');
 		expect(html).not.toContain('The Dark Knight');
 		expect(html).not.toContain('Oppenheimer');

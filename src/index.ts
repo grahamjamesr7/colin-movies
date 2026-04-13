@@ -31,6 +31,7 @@ async function checkForNewFilms(env: Env) {
 
 	await sendEmail(
 		env.RESEND_API_KEY,
+		env.FROM_EMAIL,
 		env.TEST === 'true' ? env.ADMIN_EMAIL : env.CLIENT_EMAIL,
 		`[Movie Bot] ${newFilms.length} New Film${newFilms.length > 1 ? 's' : ''} at the Bullock!`,
 		`<p>New IMAX films just posted:</p><ul>${filmList}</ul>`,
@@ -39,6 +40,7 @@ async function checkForNewFilms(env: Env) {
 	if (env.TEST !== 'true' && env.COPY_ADMIN === 'true') {
 		await sendEmail(
 			env.RESEND_API_KEY,
+			env.FROM_EMAIL,
 			env.ADMIN_EMAIL,
 			`[Movie Bot] ${newFilms.length} New Film${newFilms.length > 1 ? 's' : ''} at the Bullock!`,
 			`<p>New IMAX films just posted:</p><ul>${filmList}</ul>`,
@@ -59,7 +61,7 @@ export default {
 		ctx.waitUntil(
 			checkForNewFilms(env).catch(async (error) => {
 				console.error('Error during scheduled run:', error);
-				await sendEmail(env.RESEND_API_KEY, env.ADMIN_EMAIL, 'Colin Movie Bot Error', String(error));
+				await sendEmail(env.RESEND_API_KEY, env.FROM_EMAIL, env.ADMIN_EMAIL, 'Colin Movie Bot Error', String(error));
 			}),
 		);
 	},
@@ -73,7 +75,7 @@ export default {
 			});
 		} catch (error) {
 			console.error('Error during fetch handler:', error);
-			await sendEmail(env.RESEND_API_KEY, env.ADMIN_EMAIL, 'Colin Movie Bot Error', String(error));
+			await sendEmail(env.RESEND_API_KEY, env.FROM_EMAIL, env.ADMIN_EMAIL, 'Colin Movie Bot Error', String(error));
 			return new Response('error', { status: 500 });
 		}
 	},

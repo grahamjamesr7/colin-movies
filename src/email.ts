@@ -1,11 +1,9 @@
 import { Resend } from 'resend';
 
-const FROM = 'Colin Movie Bot <do-not-reply@YOUR_DOMAIN>';
-
-export async function sendEmail(apiKey: string, to: string, subject: string, body: string): Promise<void> {
+export async function sendEmail(apiKey: string, from: string, to: string, subject: string, body: string): Promise<void> {
 	const resend = new Resend(apiKey);
 	const { error } = await resend.emails.send({
-		from: FROM,
+		from,
 		to,
 		subject,
 		html: body,
