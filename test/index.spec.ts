@@ -119,6 +119,51 @@ describe('new film detection', () => {
 		expect(html).not.toContain('Interstellar');
 	});
 
+	it('logs new showtimes on seen films without emailing', async () => {
+		vi.mocked(fetchFilms).mockResolvedValue([FILMS[0]]);
+		vi.mocked(fetchShowtimes).mockResolvedValue([{ filmSlug: 'interstellar', filmTitle: 'Interstellar', date: '2026-05-01' }]);
+
+		// first run -- seeds KV
+		const ctx1 = createExecutionContext();
+		await worker.fetch(new IncomingRequest('http://localhost'), env, ctx1);
+		await waitOnExecutionContext(ctx1);
+		vi.mocked(sendEmail).mockClear();
+
+		// second run -- a new showtime appears for the same film
+		vi.mocked(fetchShowtimes).mockResolvedValue([
+			{ filmSlug: 'interstellar', filmTitle: 'Interstellar', date: '2026-05-01' },
+			{ filmSlug: 'interstellar', filmTitle: 'Interstellar', date: '2026-06-15' },
+		]);
+
+		const logged: string[] = [];
+		const origLog = console.log;
+		console.log = (...args: unknown[]) => {
+			logged.push(args.map(String).join(' '));
+		};
+		const ctx2 = createExecutionContext();
+		const res = await worker.fetch(new IncomingRequest('http://localhost'), env, ctx2);
+		await waitOnExecutionContext(ctx2);
+		console.log = origLog;
+
+		expect(res.status).toBe(200);
+		expect((await res.json<{ newFilms: Film[] }>()).newFilms).toHaveLength(0);
+		expect(sendEmail).not.toHaveBeenCalled();
+
+		const joined = logged.join('\n');
+		expect(joined).toMatch(/New showtimes for existing film "Interstellar".*2026-06-15/);
+
+		// third run -- no changes, the new showtime should not be logged again
+		const logged2: string[] = [];
+		console.log = (...args: unknown[]) => {
+			logged2.push(args.map(String).join(' '));
+		};
+		const ctx3 = createExecutionContext();
+		await worker.fetch(new IncomingRequest('http://localhost'), env, ctx3);
+		await waitOnExecutionContext(ctx3);
+		console.log = origLog;
+		expect(logged2.join('\n')).not.toContain('New showtimes for existing film');
+	});
+
 	it('sends admin copy when COPY_ADMIN is true and TEST is false', async () => {
 		vi.mocked(fetchFilms).mockResolvedValue(FILMS);
 		vi.mocked(fetchShowtimes).mockResolvedValue(showtimesFor(FILMS));

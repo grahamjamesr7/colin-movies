@@ -1,6 +1,6 @@
 import { fetchFilms, fetchShowtimes } from './bullock.ts';
 import { sendEmail } from './email.ts';
-import { getNewFilms, markSeen } from './kv.ts';
+import { detectChanges, persistChanges } from './kv.ts';
 
 async function checkForNewFilms(env: Env) {
 	const allFilms = await fetchFilms('imax');
@@ -18,10 +18,18 @@ async function checkForNewFilms(env: Env) {
 	}
 	console.log(`${activeFilms.length} films have upcoming showtimes.`);
 
-	const newFilms = await getNewFilms(env.SEEN_FILMS, activeFilms);
+	const changes = await detectChanges(env.SEEN_FILMS, activeFilms, showtimes);
+
+	const addedShowtimes = changes.filter((c) => !c.isNew && c.addedDates.length > 0);
+	for (const c of addedShowtimes) {
+		console.log(`New showtimes for existing film "${c.film.title}": ${c.addedDates.join(', ')}`);
+	}
+
+	const newFilms = changes.filter((c) => c.isNew).map((c) => c.film);
 
 	if (newFilms.length === 0) {
 		console.log('No new films detected.');
+		await persistChanges(env.SEEN_FILMS, changes);
 		return newFilms;
 	}
 
@@ -49,7 +57,7 @@ async function checkForNewFilms(env: Env) {
 		console.debug('Skipping admin copy for testing.');
 	}
 
-	await markSeen(env.SEEN_FILMS, newFilms);
+	await persistChanges(env.SEEN_FILMS, changes);
 
 	return newFilms;
 }
