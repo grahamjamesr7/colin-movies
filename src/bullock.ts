@@ -66,7 +66,7 @@ function decodeEntities(s: string): string {
 }
 
 async function getJSON<T>(url: string): Promise<{ body: T; res: Response }> {
-	const res = await fetch(url);
+	const res = await fetch(url, { cf: { cacheTtl: 0 } });
 	if (!res.ok) {
 		throw new Error(`GET ${url} -> ${res.status}`);
 	}
